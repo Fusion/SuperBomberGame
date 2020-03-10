@@ -1,0 +1,7 @@
+(executable
+ (package sbg)
+ (public_name Sbg)
+ (name main)
+ (libraries sbg.lib)
+ (modes byte exe)
+)
