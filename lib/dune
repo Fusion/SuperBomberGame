@@ -2,5 +2,5 @@
  (name Sbg)
  (public_name sbg.lib)
  (ocamlopt_flags -linkall)
- (libraries core sdl2 toml console.lib)
+ (libraries core incremental sdl2 toml console.lib)
 )

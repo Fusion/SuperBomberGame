@@ -2,6 +2,7 @@ open Sdl;
 open Sbgc;
 open World;
 open Time_now;
+open GameEngineDefs;
 
 /*
  For a smooth experience, we must make sure that we display a frame within our tick budget.
@@ -34,13 +35,14 @@ let init() = {
     let (window, renderer) =
         Render.create_window_and_renderer(~width = canvas_width, ~height = canvas_height, ~flags=[]);
     let world:snapshot = {
-        player: {
+        actors: [{
+            actor_type: Player,
             frame: 0,
-            moving: false,
+            motion: NotMoving,
             orientation: Down,
             x: 1,
             y: 1
-        }
+        }]
     };
     let assets:assets = {
         block: load_pic(renderer, "assets/block.bmp"),
@@ -77,7 +79,7 @@ let display_level: (canvas_type, snapshot) => unit
 
     for (y in 0 to stage_height) {
         for (x in 0 to stage_width) {
-            switch(stage_level[y][x]) {
+            switch stage_level[y][x] {
             | 1 => {
                 let canvas_rect = Rect.make4(~x=(x * stage_pic_size), ~y=(y * stage_pic_size), ~w=stage_pic_size, ~h=stage_pic_size);
                 Render.copy(canvas.renderer, ~texture = canvas.assets.block2, ~src_rect = tex_rect, ~dst_rect = canvas_rect, ()); }
@@ -96,103 +98,157 @@ let display_level: (canvas_type, snapshot) => unit
     }
 };
 
-let display_player: (canvas_type, snapshot) => unit
-= (canvas, world) => {
+let display_player: (canvas_type, actor) => unit
+= (canvas, actor) => {
 
     let actual_display: (int, int) => unit
     = (frame_idx, direction_idx) => {
         /*Printf.printf("Frame: %d\n%!", frame_idx);*/
         let tex_rect = Rect.make4(~x=direction_idx*stage_pic_size, ~y=frame_idx*stage_pic_size*2, ~w=64, ~h=128);
-        let canvas_rect = Rect.make4(~x=(world.player.x * stage_pic_size), ~y=(world.player.y * stage_pic_size), ~w=stage_pic_size, ~h=stage_pic_size);
+        let canvas_rect = Rect.make4(~x=(actor.x * stage_pic_size), ~y=(actor.y * stage_pic_size), ~w=stage_pic_size, ~h=stage_pic_size);
         Render.copy(canvas.renderer, ~texture = canvas.assets.player, ~src_rect = tex_rect, ~dst_rect = canvas_rect, ());
     };
 
-    switch(world.player.orientation) {
-    | Down => actual_display(world.player.frame, 0)
-    | Up => actual_display(world.player.frame, 1)
-    | Left => actual_display(world.player.frame, 2)
-    | Right => actual_display(world.player.frame, 3)
+    switch actor.orientation {
+    | Down => actual_display(actor.frame, 0)
+    | Up => actual_display(actor.frame, 1)
+    | Left => actual_display(actor.frame, 2)
+    | Right => actual_display(actor.frame, 3)
     };
 };
 
 let display: (canvas_type, snapshot) => unit
 = (canvas, world) => {
+
+    let rec display_actors: actors => unit
+    = actors => {
+        switch actors {
+        | [] => ()
+        | [head, ...tail] => {
+            switch head.actor_type {
+            | Player => display_player(canvas, head)
+            | _ => ()
+            };
+            display_actors(tail);
+        }};
+    };
+
     /*Printf.printf("%s\n%!", "-display-");*/
     canvas.renderer |> Render.set_draw_color(~rgb = canvas_bg_color, ~a = canvas_alpha);
     canvas.renderer |> Render.clear;
     /* canvas |> display_tests; */
     display_level(canvas, world);
-    display_player(canvas, world);
+    display_actors(world.actors);
     canvas.renderer |> Render.render_present;
 };
 
 let move_arrow_of_time: snapshot => snapshot
 = world => {
-    /*Printf.printf("%s\n%!", "--arrow->");*/
 
-    /* Yes, we update frames in this function rather than when displaying
-       as it is ok to lose frames rather than trying to catch up visually */
-    let inc_frame: (int) => int
-    = frame_idx => {
-        switch(frame_idx) {
-        | 7 => 0
-        | n => n + 1
-        }
+    let rec update_all_actors: (actors, actors) => actors
+    = (actors, updated_actors) => {
+
+        let update_single_actor: actor => actor
+        = actor => {
+
+            /* Yes, we update frames in this function rather than when displaying
+            as it is ok to lose frames rather than trying to catch up visually */
+            let next_frame: (int) => int
+            = frame_idx => {
+                switch(frame_idx) {
+                | 7 => 0
+                | n => n + 1
+                }
+            };
+
+            /* Bumping into any obstacle? */
+            let try_moving: (actor, int, int) => (motion, int, int)
+            = (actor, horizontal, vertical) => {
+                let new_x = actor.x + horizontal;
+                let new_y = actor.y + vertical;
+                switch(stage_level[new_y][new_x]) {
+                | 0 => (Moving, new_x, new_y)
+                | _ => (NotMoving, actor.x, actor.y)
+                }
+            }
+
+            switch(actor.motion, actor.orientation) {
+            | (NotMoving, _) => actor
+            | (Moving, Down) => {
+                let (still_moving, x,y) = try_moving(actor, 0, 1);
+                {...actor, frame: next_frame(actor.frame), motion: still_moving, x: x, y: y} }
+            | (Moving, Up) => {
+                let (still_moving, x,y) = try_moving(actor, 0, -1);
+                {...actor, frame: next_frame(actor.frame), motion: still_moving, x: x, y: y} }
+            | (Moving, Left) => {
+                let (still_moving, x,y) = try_moving(actor, -1, 0);
+                {...actor, frame: next_frame(actor.frame), motion: still_moving, x: x, y: y} }
+            | (Moving, Right) => {
+                let (still_moving, x,y) = try_moving(actor, 1, 0);
+                {...actor, frame: next_frame(actor.frame), motion: still_moving, x: x, y: y} }
+            };
+        };
+
+        switch actors {
+        | [] => updated_actors
+        | [head, ...tail] => {
+            let updated_actor = update_single_actor(head);
+            update_all_actors(tail, [updated_actor, ...updated_actors])
+        }};
     };
+    
+    {actors: update_all_actors(world.actors, [])}
+};
 
-    /* Bumping into any obstacle? */
-    let try_moving: (snapshot, int, int) => (bool, int, int)
-    = (world, horizontal, vertical) => {
-        let new_x = world.player.x + horizontal;
-        let new_y = world.player.y + vertical;
-        switch(stage_level[new_y][new_x]) {
-        | 0 => (true, new_x, new_y)
-        | _ => (false, world.player.x, world.player.y)
+/*
+ * An all-purpose function that returns an actor list
+ * with the player being updated whichever way we want.
+ */
+let rec change_player_info: (actors, actors, 'a) => actors
+= (actors, updated_actors, action) => {
+    switch actors {
+    | [] => updated_actors
+    | [head, ...tail] => {
+        switch(head.actor_type) {
+        | Player => {
+            change_player_info(tail, [head |> action, ...updated_actors], action)
         }
-    }
-
-    switch(world.player.moving, world.player.orientation) {
-    | (false, _) => world
-    | (true, Down) => {
-        let (still_moving, x,y) = try_moving(world, 0, 1);
-        {player: {...world.player, frame: inc_frame(world.player.frame), moving: still_moving, x: x, y: y}} }
-    | (true, Up) => {
-        let (still_moving, x,y) = try_moving(world, 0, -1);
-        {player: {...world.player, frame: inc_frame(world.player.frame), moving: still_moving, x: x, y: y}} }
-    | (true, Left) => {
-        let (still_moving, x,y) = try_moving(world, -1, 0);
-        {player: {...world.player, frame: inc_frame(world.player.frame), moving: still_moving, x: x, y: y}} }
-    | (true, Right) => {
-        let (still_moving, x,y) = try_moving(world, 1, 0);
-        {player: {...world.player, frame: inc_frame(world.player.frame), moving: still_moving, x: x, y: y}} }
-    };
+        | _ => change_player_info(tail, [head, ...updated_actors], action)
+        }
+    }};
 };
 
 let handle_events: snapshot => snapshot
 = world => {
-    switch(Event.poll_event()) {
-    | None => world
-    | Some(ev) => switch(ev) {
-        | Event.KeyDown({keycode: Keycode.Q, _})
-        | Event.KeyDown({keycode: Keycode.Escape, _})
-        | Event.Quit(_) => {
-            finalize()
-        }
-        | Event.KeyDown({keycode: code, _}) => {
-            let key = code |> Keycode.to_string;
-            Printf.printf("Key %s\n%!", key);
-            switch(key) {
-            | "Up" => {player: {...world.player, moving: true, orientation: Up}}
-            | "Down" => {player: {...world.player, moving: true, orientation: Down}}
-            | "Left" => {player: {...world.player, moving: true, orientation: Left}}
-            | "Right" => {player: {...world.player, moving: true, orientation: Right}}
-            | " " => world
-            | _ => world
+
+    let react_to_event: actor => actor
+    = actor => {
+        switch(Event.poll_event()) {
+        | None => actor
+        | Some(ev) => switch(ev) {
+            | Event.KeyDown({keycode: Keycode.Q, _})
+            | Event.KeyDown({keycode: Keycode.Escape, _})
+            | Event.Quit(_) => {
+                finalize()
             }
-        }
-        | _ => world
-        }
+            | Event.KeyDown({keycode: code, _}) => {
+                let key = code |> Keycode.to_string;
+                /*Printf.printf("Key %s\n%!", key);*/
+                switch(key) {
+                | "Up" => {...actor, motion: Moving, orientation: Up}
+                | "Down" => {...actor, motion: Moving, orientation: Down}
+                | "Left" => {...actor, motion: Moving, orientation: Left}
+                | "Right" => {...actor, motion: Moving, orientation: Right}
+                | " " => actor
+                | _ => actor
+                }
+            }
+            | _ => actor
+            }
+        };
     };
+
+    {actors: change_player_info(world.actors, [], react_to_event)}
 };
 
 /*
@@ -212,11 +268,11 @@ let run: (canvas_type, snapshot) => unit
     let rec run_loop: (canvas_type, snapshot, int) => unit
     = (canvas, world, last_frame) => {
 
-        let rec update_: (snapshot, int) => snapshot
+        let rec update_loop: (snapshot, int) => snapshot
         = (world, iter) => {
             switch(iter) {
             | 0 => world
-            | _ => update_(world |> move_arrow_of_time, iter - 1)
+            | _ => update_loop(world |> move_arrow_of_time, iter - 1)
             }
         };
 
@@ -228,7 +284,7 @@ let run: (canvas_type, snapshot) => unit
             if (elapsed >= frame_budget *. 2.0) {
                 Printf.printf("Warning! Skipped %f frames.\n%!", (elapsed /. frame_budget));
             };
-            let new_world_after_time = update_(new_world_after_events, (elapsed /. frame_budget) |> Float.to_int);
+            let new_world_after_time = update_loop(new_world_after_events, (elapsed /. frame_budget) |> Float.to_int);
             display(canvas, new_world_after_time);
             run_loop(canvas, new_world_after_time, now);
         } else {

@@ -1,0 +1,1 @@
+type motion = Moving | NotMoving;

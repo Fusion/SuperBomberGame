@@ -1,13 +1,19 @@
+open GameEngineDefs;
+
 type orientation = Down | Up | Left | Right;
+type actor_type  = None | Player | Bomb;
 
 type actor = {
+    actor_type: actor_type,
     frame: int,
     orientation: orientation,
-    moving: bool,
+    motion: motion,
     x: int,
     y: int
 };
 
+type actors = list(actor);
+
 type snapshot = {
-    player: actor
+    actors: actors
 };
