@@ -1,3 +1,5 @@
+# What is this?
+
 Not a complete game!
 
 I have not dabbled in writing any videogame-related code since before the advent of GPUs.
@@ -10,3 +12,35 @@ Think of this as the first thing someone who has not written videogame code in y
  Hopefully, curious Reason Native devs will find some amusement in this.
 
 ![](assets/gc.png)
+
+# Keys
+
+| Keys                  | Action                |
+| --------------------- | --------------------- |
+| Left, Right, Up, Down | Move character around |
+| Space                 | Drop a bomb           |
+| Q, ESC                | Exit "game"           |
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
