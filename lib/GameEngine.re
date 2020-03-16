@@ -2,7 +2,7 @@ open Sbgc;
 open Time_now;
 open GameEngineDefs;
 open GameEvents;
-open World;
+open GameWorld;
 open GameRender;
 
 /*

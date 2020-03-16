@@ -31,11 +31,11 @@ let move_arrow_of_time: snapshot => snapshot
         }}
     };
 
-    let rec update_actors: (actors, actors) => actors
-    = (actors, updated_actors) => {
+    let rec update_actors: (actors, actors, actors) => actors
+    = (remaining_actors, updated_actors, all_actors) => {
 
-        let update_actor: actor => actor
-        = actor => {
+        let update_actor: (actor, actors) => actor
+        = (actor, all_actors) => {
 
             /* Yes, we update frames in this function rather than when displaying
             as it is ok to lose frames rather than trying to catch up visually */
@@ -52,8 +52,11 @@ let move_arrow_of_time: snapshot => snapshot
             = (actor, horizontal, vertical) => {
                 let new_x = actor.x + horizontal;
                 let new_y = actor.y + vertical;
-                switch(stage_level[0][new_y][new_x]) {
-                | 0 => (Moving, new_x, new_y)
+                switch(
+                    actor.actor_type,
+                    stage_level[0][new_y][new_x],
+                    !List.exists(item => item.x == new_x && item.y == new_y, all_actors)) {
+                | (Player, 0, true) => (Moving, new_x, new_y)
                 | _ => (NotMoving, actor.x, actor.y)
                 }
             }
@@ -75,16 +78,16 @@ let move_arrow_of_time: snapshot => snapshot
             };
         };
 
-        switch actors {
+        switch remaining_actors {
         | [] => updated_actors
         | [head, ...tail] => {
-            let updated_actor = update_actor(head);
-            update_actors(tail, [updated_actor, ...updated_actors])
+            let updated_actor = update_actor(head, all_actors);
+            update_actors(tail, [updated_actor, ...updated_actors], all_actors)
         }};
     };
     
     /* First, let's see what pending events we have */
     let new_world = update_from_reactions(world);
     /* Then, update our actors' states */
-    {...new_world, actors: update_actors(new_world.actors, [])}
+    {...new_world, actors: update_actors(new_world.actors, [], new_world.actors)}
 };
