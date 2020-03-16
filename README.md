@@ -8,3 +8,5 @@ Think of this as the first thing someone who has not written videogame code in y
  would commit. No optimization whatsoever since this is our first draft.
 
  Hopefully, curious Reason Native devs will find some amusement in this.
+
+![](assets/gc.png)
